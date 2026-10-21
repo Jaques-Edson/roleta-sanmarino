@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Roleta de Prêmios</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: "Trebuchet MS", Arial, sans-serif;
+    background: radial-gradient(circle at 50% 30%, #2a2a2a 0%, #141414 60%, #000 100%);
+    color: #fff; overflow: hidden;
+    user-select: none; -webkit-user-select: none; touch-action: none;
+    -webkit-tap-highlight-color: transparent; height: 100vh; height: 100dvh;
+  }
+  #tela {
+    position: fixed; top: 12px; right: 12px; z-index: 5;
+    width: 56px; height: 56px; font-size: 26px; border: 0; border-radius: 50%;
+    background: rgba(255,255,255,.15); color: #fff; cursor: pointer;
+  }
+  .logo-faixa {
+    margin-top: 10px; padding: 4px 12px;
+  }
+  .logo-faixa img { height: clamp(40px, 8vh, 64px); width: auto; display: block; }
+  h1 {
+    margin: 8px 0 0; font-size: clamp(22px, 4vw, 36px);
+    color: #ffd23f; text-shadow: 0 3px 0 #b8860b, 0 0 20px rgba(255,210,63,.6);
+    letter-spacing: 2px; text-transform: uppercase; text-align: center;
+  }
+  .sub { margin: 4px 0 10px; opacity: .85; text-align: center; }
+  .stage { position: relative; width: min(94vw, calc(100dvh - 300px), 760px); aspect-ratio: 1; margin-top: 14px; }
+  canvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+  .pointer {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; z-index: 3;
+    border-left: 20px solid transparent; border-right: 20px solid transparent;
+    border-top: 44px solid #ff3b3b;
+    filter: drop-shadow(0 4px 4px rgba(0,0,0,.6));
+  }
+  button#girar {
+    margin-top: 14px; padding: 18px 64px; font-size: 28px; font-weight: bold; min-height: 64px;
+    color: #3b1d00; background: linear-gradient(#ffe066, #ffb703);
+    border: 0; border-radius: 50px; cursor: pointer; text-transform: uppercase;
+    box-shadow: 0 6px 0 #b87400, 0 10px 20px rgba(0,0,0,.5);
+    transition: transform .1s, box-shadow .1s;
+  }
+  button#girar:active { transform: translateY(4px); box-shadow: 0 2px 0 #b87400; }
+  button#girar:disabled { filter: grayscale(.6); cursor: not-allowed; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.7);
+    display: none; align-items: center; justify-content: center; z-index: 10;
+  }
+  .overlay.show { display: flex; }
+  .card {
+    background: linear-gradient(#fff, #fff3b0); color: #111; text-align: center;
+    padding: 30px 36px; border-radius: 24px; max-width: 90vw;
+    border: 6px solid #ffd23f; box-shadow: 0 0 60px rgba(255,210,63,.7);
+    animation: pop .5s cubic-bezier(.2, 1.6, .4, 1);
+  }
+  .card h2 { margin: 0; font-size: 20px; letter-spacing: 3px; color: #d62828; }
+  .card .premio { font-size: clamp(28px, 7vw, 46px); font-weight: bold; margin: 12px 0 4px; }
+  .card .emoji { font-size: 64px; }
+  .card button {
+    margin-top: 18px; padding: 10px 30px; font-size: 18px; font-weight: bold;
+    border: 0; border-radius: 30px; background: #111; color: #ffd60a; cursor: pointer;
+  }
+  @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #confete { position: fixed; inset: 0; pointer-events: none; z-index: 11; }
+</style>
+</head>
+<body>
+
+<button id="tela" title="Tela cheia">⛶</button>
+<div class="logo-faixa"><img src="logo.png" alt="San Marino Multimarcas"></div>
+<h1>Roleta de Prêmios</h1>
+<div class="sub">Gire e descubra o seu prêmio!</div>
+
+<div class="stage">
+  <div class="pointer"></div>
+  <canvas id="roleta" width="1000" height="1000"></canvas>
+</div>
+
+<button id="girar">Girar!</button>
+
+<div class="overlay" id="overlay">
+  <div class="card">
+    <h2 id="rTitulo">🎉 PARABÉNS! 🎉</h2>
+    <div class="emoji" id="rEmoji"></div>
+    <div class="premio" id="rPremio"></div>
+    <button id="fechar">Fechar</button>
+  </div>
+</div>
+<canvas id="confete"></canvas>
+
+<script>
+// ====== PRÊMIOS (edite aqui) ======
+const premios = [
+  { nome: "Vale Cinema",                  emoji: "🎬", cor: "#111111", texto: "#ffffff" },
+  { nome: "Taxas de Transferência",       emoji: "📄", cor: "#d90429", texto: "#ffffff" },
+  { nome: "Tente outra vez",              emoji: "🚗", cor: "#ffd60a", texto: "#111111", repete: true },
+  { nome: "Almoço em Gramado",            emoji: "🍽️", cor: "#1b9a3e", texto: "#ffffff" },
+  { nome: "30% de Desconto em Acessórios", emoji: "🏷️", cor: "#ffffff", texto: "#111111" },
+];
+// ==================================
+
+const canvas = document.getElementById("roleta");
+const ctx = canvas.getContext("2d");
+const btn = document.getElementById("girar");
+const N = premios.length;
+const ARC = (Math.PI * 2) / N;
+const W = canvas.width, C = W / 2, R = C - 40;
+
+let rot = 0;          // rotação atual (radianos)
+let girando = false;
+let ultimoIdx = -1;
+let audioCtx = null;
+
+function indiceNoPonteiro(r) {
+  let a = (-Math.PI / 2 - r) % (Math.PI * 2);
+  if (a < 0) a += Math.PI * 2;
+  return Math.floor(a / ARC) % N;
+}
+
+function quebraTexto(texto, max) {
+  const palavras = texto.split(" "), linhas = [];
+  let l = "";
+  for (const p of palavras) {
+    if ((l + " " + p).trim().length > max) { linhas.push(l.trim()); l = p; }
+    else l += " " + p;
+  }
+  if (l.trim()) linhas.push(l.trim());
+  return linhas;
+}
+
+function desenha(tempo = 0) {
+  ctx.clearRect(0, 0, W, W);
+
+  // aro externo
+  ctx.beginPath(); ctx.arc(C, C, R + 34, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffd23f"; ctx.fill();
+  ctx.beginPath(); ctx.arc(C, C, R + 14, 0, Math.PI * 2);
+  ctx.fillStyle = "#7a1f1f"; ctx.fill();
+
+  // fatias
+  for (let i = 0; i < N; i++) {
+    const ini = rot + i * ARC, fim = ini + ARC;
+    ctx.beginPath(); ctx.moveTo(C, C); ctx.arc(C, C, R, ini, fim); ctx.closePath();
+    ctx.fillStyle = premios[i].cor; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = "#fff"; ctx.stroke();
+
+    // texto
+    ctx.save();
+    ctx.translate(C, C);
+    ctx.rotate(ini + ARC / 2);
+    ctx.textAlign = "right"; ctx.fillStyle = premios[i].texto;
+    ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 3;
+    ctx.font = "bold 50px 'Trebuchet MS', Arial";
+    ctx.fillText(premios[i].emoji, R - 24, 18);
+    ctx.font = "bold 36px 'Trebuchet MS', Arial";
+    const linhas = quebraTexto(premios[i].nome, 14);
+    const base = -((linhas.length - 1) * 20) + 10;
+    linhas.forEach((ln, k) => ctx.fillText(ln, R - 100, base + k * 40));
+    ctx.restore();
+  }
+
+  // lâmpadas do aro
+  const lampadas = 20;
+  for (let i = 0; i < lampadas; i++) {
+    const a = (i / lampadas) * Math.PI * 2;
+    const x = C + Math.cos(a) * (R + 24), y = C + Math.sin(a) * (R + 24);
+    const acesa = girando ? (Math.floor(tempo / 120) + i) % 2 === 0 : i % 2 === 0;
+    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fillStyle = acesa ? "#fffbe0" : "#b8860b";
+    ctx.shadowColor = acesa ? "#fff59d" : "transparent"; ctx.shadowBlur = acesa ? 18 : 0;
+    ctx.fill(); ctx.shadowBlur = 0;
+  }
+
+  // centro
+  ctx.beginPath(); ctx.arc(C, C, 70, 0, Math.PI * 2);
+  const g = ctx.createRadialGradient(C - 15, C - 15, 5, C, C, 70);
+  g.addColorStop(0, "#fff7c2"); g.addColorStop(1, "#e0a800");
+  ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = 6; ctx.strokeStyle = "#7a1f1f"; ctx.stroke();
+  ctx.fillStyle = "#7a1f1f"; ctx.font = "bold 30px 'Trebuchet MS'";
+  ctx.textAlign = "center"; ctx.fillText("GIRE", C, C + 11);
+}
+
+function tic() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = "square"; o.frequency.value = 900;
+    g.gain.setValueAtTime(.08, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + .05);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + .05);
+  } catch (e) {}
+}
+
+function fanfarra() {
+  try {
+    const notas = [523, 659, 784, 1047];
+    notas.forEach((f, i) => {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = "triangle"; o.frequency.value = f;
+      const t = audioCtx.currentTime + i * 0.14;
+      g.gain.setValueAtTime(.2, t);
+      g.gain.exponentialRampToValueAtTime(.001, t + .4);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t); o.stop(t + .4);
+    });
+  } catch (e) {}
+}
+
+function girar() {
+  if (girando) return;
+  girando = true; btn.disabled = true;
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  const alvo = Math.floor(Math.random() * N);
+  const deslocamento = (Math.random() * 0.7 - 0.35) * ARC; // dentro da fatia
+  const base = -Math.PI / 2 - (alvo + 0.5) * ARC + deslocamento;
+  const inicio = rot;
+  let delta = (base - inicio) % (Math.PI * 2);
+  if (delta < 0) delta += Math.PI * 2;
+  const fim = inicio + delta + Math.PI * 2 * (6 + Math.floor(Math.random() * 3));
+  const dur = 6000, t0 = performance.now();
+  ultimoIdx = indiceNoPonteiro(rot);
+
+  function frame(agora) {
+    const p = Math.min((agora - t0) / dur, 1);
+    const e = 1 - Math.pow(1 - p, 4); // desacelera no final
+    rot = inicio + (fim - inicio) * e;
+    const idx = indiceNoPonteiro(rot);
+    if (idx !== ultimoIdx) { tic(); ultimoIdx = idx; }
+    desenha(agora);
+    if (p < 1) requestAnimationFrame(frame);
+    else { girando = false; btn.disabled = false; desenha(); mostra(alvo); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function mostra(i) {
+  const p = premios[i];
+  document.getElementById("rEmoji").textContent = p.emoji;
+  document.getElementById("rPremio").textContent = p.nome;
+  document.getElementById("rTitulo").textContent = p.repete ? "🏁 QUASE!" : "🎉 PARABÉNS! 🎉";
+  document.getElementById("fechar").textContent = p.repete ? "Girar de novo" : "Fechar";
+  document.getElementById("overlay").classList.add("show");
+  if (!p.repete) { fanfarra(); confete(); }
+}
+
+document.getElementById("fechar").onclick = () => {
+  document.getElementById("overlay").classList.remove("show");
+  if (document.getElementById("fechar").textContent === "Girar de novo") girar();
+};
+btn.onclick = girar;
+
+// toque, clique ou arrastada na roleta também gira
+canvas.addEventListener("pointerdown", e => { e.preventDefault(); girar(); });
+
+// tela cheia (botão no canto)
+document.getElementById("tela").onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else (document.documentElement.requestFullscreen ||
+        document.documentElement.webkitRequestFullscreen).call(document.documentElement);
+};
+
+// evita menu de contexto e zoom por gesto no tablet
+document.addEventListener("contextmenu", e => e.preventDefault());
+document.addEventListener("gesturestart", e => e.preventDefault());
+
+// ===== confete =====
+function confete() {
+  const cv = document.getElementById("confete"), c = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  const cores = ["#ffd60a", "#d90429", "#1b9a3e", "#111111", "#ffffff"];
+  const ps = Array.from({ length: 160 }, () => ({
+    x: cv.width / 2, y: cv.height / 2,
+    vx: (Math.random() - .5) * 18, vy: Math.random() * -16 - 4,
+    s: Math.random() * 8 + 4, r: Math.random() * 6,
+    cor: cores[Math.floor(Math.random() * cores.length)]
+  }));
+  let n = 0;
+  (function anima() {
+    c.clearRect(0, 0, cv.width, cv.height);
+    ps.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += .4; p.r += .2;
+      c.save(); c.translate(p.x, p.y); c.rotate(p.r);
+      c.fillStyle = p.cor; c.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * .6); c.restore();
+    });
+    if (++n < 150) requestAnimationFrame(anima); else c.clearRect(0, 0, cv.width, cv.height);
+  })();
+}
+
+desenha();
+</script>
+</body>
+</html>
