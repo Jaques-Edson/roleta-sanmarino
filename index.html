@@ -16,14 +16,14 @@
     -webkit-tap-highlight-color: transparent; height: 100vh; height: 100dvh;
   }
   #tela {
-    position: fixed; top: 12px; right: 12px; z-index: 5;
-    width: 56px; height: 56px; font-size: 26px; border: 0; border-radius: 50%;
+    position: fixed; bottom: 12px; right: 12px; z-index: 5;
+    width: 48px; height: 48px; font-size: 22px; border: 0; border-radius: 50%;
     background: rgba(255,255,255,.15); color: #fff; cursor: pointer;
   }
   .logo-faixa {
-    margin-top: 10px; padding: 4px 12px;
+    margin-top: 10px; padding: 4px 12px; flex-shrink: 0; max-width: 100%;
   }
-  .logo-faixa img { height: clamp(40px, 8vh, 64px); width: auto; display: block; }
+  .logo-faixa img { width: min(88vw, 440px, 60vh); height: auto; display: block; }
   h1 {
     margin: 8px 0 0; font-size: clamp(22px, 4vw, 36px);
     color: #ffd23f; text-shadow: 0 3px 0 #b8860b, 0 0 20px rgba(255,210,63,.6);
